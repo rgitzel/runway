@@ -9,7 +9,8 @@ CloudFormation modules are managed by 2 files:
 - a key/value environment file 
 - a yaml file defining the stacks/templates/params.
 
-Environment - name these in the form of ENV-REGION.env (e.g. dev-us-east-1.env) or ENV.env (e.g. dev.env)::
+Environment - name these files in the form of ``ENV-REGION.env`` (e.g. ``dev-us-east-1.env``) or ``ENV.env`` (e.g. ``dev.env``) and
+place them in the module root or in its ``env`` folder::
 
     # Namespace is used as each stack's prefix
     # We recommend an (org/customer)/environment delineation
@@ -204,7 +205,11 @@ Standard `Serverless
 <https://serverless.com/framework/>`_ rules apply, with the following
 recommendations/caveats:
 
-- Runway environments map directly to Serverless stages.
+- The Cloudformation stack will be named
+- By default the Runway deploy environment is used as the Serverless stage name.
+-- You can override this in the environment config, below. This is useful when
+   you want to give the Runway module a more descriptive name, perhaps to distinguish
+   between AWS accounts.
 - A ``package.json`` file is required, specifying the serverless dependency, e.g.:
 
 ::
@@ -223,21 +228,12 @@ recommendations/caveats:
 
 - We strongly recommend you commit the package-lock.json that is generated
   after running `npm install`
-- Each stage requires either its own variables file (even if empty for a
-  particular stage) in one of the following forms, or a configured environment
-  in the module options (see ``Enabling Environments Via Runway
-  Deployment/Module Options`` below):
 
-::
+Environment - name these (possibly empty) files in the form of ``ENV-REGION.yml`` (e.g. ``dev-us-east-1.yml``) or ``ENV.yml`` (e.g. ``dev.yml``) and
+place them in the module root or in its ``env`` folder::
 
-    env/STAGE-REGION.yml
-    config-STAGE-REGION.yml
-    env/STAGE.yml
-    config-STAGE.yml
-    env/STAGE-REGION.json
-    config-STAGE-REGION.json
-    env/STAGE.json
-    config-STAGE.json
+    # this is optional
+    stage: dev
 
 
 | **Enabling Environments Via Runway Deployment/Module Options**
@@ -253,8 +249,9 @@ recommendations/caveats:
       - modules:
           - path: myslsmodule
             environments:
-              dev: true
-              prod: true
+              dev-sandbox:
+                stage: dev
+              prod:
 
 and/or
 ::
@@ -263,8 +260,8 @@ and/or
 
     deployments:
       - environments:
-          dev: true
-          prod: true
+          dev:
+          prod:
         modules:
           - myslsmodule
 
@@ -273,8 +270,8 @@ and/or
 
     ---
     environments:
-      dev: true
-      prod: true
+      dev:
+      prod:
 
 (in ``runway.module.yaml``)
 
