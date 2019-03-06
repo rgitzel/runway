@@ -28,6 +28,7 @@ INSTALL_REQUIRES = [
     'future',
     'pyhcl',
     'six',
+    'pylib',
     'typing',
     'yamllint',
     'zgitignore',  # for embedded hooks
