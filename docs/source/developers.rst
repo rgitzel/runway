@@ -26,6 +26,55 @@ using ``pipenv`` in the project folder.
 
 
 
+Compiling the code
+^^^^^^^^^^^^^^^^^^
+
+Once you have made changes you are happy with, you should test and lint the changes.
+
+If you have a Python environment locally, then `make test` should do the trick::
+
+    $ make test
+    sed '/^\[!\[Build Status\]/d' README.md | pandoc --from=markdown --to=rst --output=README.rst
+    python setup.py test
+    running test
+    ....
+
+The first time you run this it might take awhile while the dependencies are downloaded.
+
+
+Compiling the code with Docker
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you don't have, and don't want, a local Python build environment, then you can use this Dockerfile::
+
+    FROM python:3
+
+    RUN apt-get update && apt-get install -y pandoc
+
+    RUN pip3 install flake8 ply pylint
+
+    VOLUME /src
+
+    CMD cd /src ; bash
+Build it, then invoke it from the root of the checked-out repo::
+
+    $ docker build . -t runway-builder
+    ...
+
+    $ docker run -it -v $(pwd):/src runway-builder
+    root@99036c87d90b:/# make test
+    sed '/^\[!\[Build Status\]/d' README.md | pandoc --from=markdown --to=rst --output=README.rst
+    python setup.py test
+    running test
+    ....
+
+
+Ideally you'll see success at the end.
+
+As above, this will take awhile the first time you run it.  Dependencies should end up in the `.egg` folder
+in the repository root, so it will persist beyond the Docker container.
+
+
 
 
 
