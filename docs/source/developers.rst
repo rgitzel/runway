@@ -55,13 +55,6 @@ If you don't have (or don't want) a local Python build environment for Runway, t
 
     RUN pip3 install flake8 ply pylint
 
-    WORKDIR /setup
-    COPY . .
-    RUN python setup.py test
-    WORKDIR ..
-    RUN rm -rf /setup
-
-    # should mount the code here
     VOLUME /src
 
     CMD cd /src; bash
@@ -77,10 +70,11 @@ Build an image from the file, then invoke it from the root of the checked-out re
     Your code has been rated at 10.00/10
 
 
-Ideally you'll see success at the end.
+Ideally you'll see this success message at the end.
 
-The dependencies are already included in the image, so builds should be quick.  If you update `setup.py` with
-different dependencies, `make test` should update them locally into the `.egg` folder on the host.
+As above, this will take awhile the first time you run it.  Dependencies should end up in the `.egg` folder
+in the repository root, so it will persist beyond the Docker container.
+
 
 
 
