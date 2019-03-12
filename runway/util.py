@@ -79,6 +79,25 @@ def merge_dicts(dict1, dict2, deep_merge=True):
     #     return {**dict1, **dict2}
 
 
+#
+# a YAML file can be parsed into a dict with values of None!
+#
+# for example a file containing just 'foo:' will be parsed as `{'foo': None}`
+#
+# thus we can't rely on `dict.get(key, default)` as it will return `None`
+#  instead of default in those cases :-(
+#
+# not that empty YAML nodes is something we should encourage, but at least using the function
+#  saves a lot of None checking
+#
+def better_dict_get(dict1, key, default):
+    """Return the default even if the key exists but the value is None."""
+    value = dict1.get(key)
+    if value:
+        return value
+    return default
+
+
 def get_embedded_lib_path():
     """Return path of embedded libraries."""
     return os.path.join(
