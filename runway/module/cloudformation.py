@@ -39,6 +39,19 @@ def make_stacker_cmd_string(args, lib_path):
 class CloudFormation(RunwayModule):
     """CloudFormation (Stacker) Runway Module."""
 
+    def gen_stacker_env_files(self):
+        """Generate possible Stacker environment filenames."""
+        return [
+            # Give preference to explicit environment-region files
+            "%s-%s.env" % (self.context.env_name, self.context.env_region),
+            # Fallback to environment name only
+            "%s.env" % self.context.env_name
+        ]
+
+    def get_stacker_env_file(self):
+        """Determine Stacker environment file name."""
+        return self.folder.locate_file(self.gen_stacker_env_files())
+
     def ensure_stacker_compat_config(self, config_filename):
         """Ensure config file can be loaded by Stacker."""
         try:
