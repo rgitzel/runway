@@ -1,8 +1,8 @@
-"""The dismantle command."""
-from .env import Env
+"""The destroy command."""
+from ..modules_command import ModulesCommand
 
 
-class Dismantle(Env):
+class Destroy(ModulesCommand):
     """Extend Env with execute to run the destroy method."""
 
     def execute(self):

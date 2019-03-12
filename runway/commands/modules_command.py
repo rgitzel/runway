@@ -5,14 +5,11 @@ from __future__ import print_function
 # https://github.com/PyCQA/pylint/issues/73
 from distutils.util import strtobool  # noqa pylint: disable=no-name-in-module,import-error
 
-from subprocess import check_call, check_output
-
 import copy
 import glob
 import json
 import logging
 import os
-import shutil
 import sys
 
 from builtins import input
@@ -21,7 +18,7 @@ import boto3
 import six
 import yaml
 
-from .base import Base
+from .runway_command import RunwayCommand, get_env, get_deployment_env_vars
 from ..context import Context
 from ..util import change_dir, load_object_from_string, merge_dicts
 
@@ -80,71 +77,6 @@ def determine_module_class(path, module_options):
                      os.path.basename(path))
         sys.exit(1)
     return load_object_from_string(module_options['class_path'])
-
-
-def get_deployment_env_vars(env_name, env_var_config=None, env_root=None):
-    """Return applicable environment variables."""
-    if env_var_config is None:
-        env_var_config = {}
-    if env_var_config.get('*'):
-        env_vars = env_var_config['*'].copy()
-    else:
-        env_vars = {}
-    if env_var_config.get(env_name):
-        for (key, val) in env_var_config[env_name].items():
-            # Lists are presumed to be path components and will be turned back
-            # to strings
-            if isinstance(val, list):
-                env_var_config[env_name][key] = os.path.join(env_root, os.path.join(*val)) if (env_root and not os.path.isabs(os.path.join(*val))) else os.path.join(*val)  # noqa pylint: disable=line-too-long
-        env_vars = merge_dicts(env_vars, env_var_config[env_name])
-    return env_vars
-
-
-def get_env_from_branch(branch_name):
-    """Determine environment name from git branch name."""
-    if branch_name.startswith('ENV-'):
-        return branch_name[4:]
-    if branch_name == 'master':
-        LOGGER.info('Translating git branch "master" to environment '
-                    '"common"')
-        return 'common'
-    return branch_name
-
-
-def get_env_from_directory(directory_name):
-    """Determine environment name from directory name."""
-    if directory_name.startswith('ENV-'):
-        return directory_name[4:]
-    return directory_name
-
-
-def get_env(path, ignore_git_branch=False):
-    """Determine environment name."""
-    if 'DEPLOY_ENVIRONMENT' in os.environ:
-        return os.environ['DEPLOY_ENVIRONMENT']
-
-    if ignore_git_branch:
-        LOGGER.info('Skipping environment lookup from current git branch '
-                    '("ignore_git_branch" is set to true in the runway '
-                    'config)')
-    else:
-        # These are not located with the top imports because they throw an
-        # error if git isn't installed
-        from git import Repo as GitRepo
-        from git.exc import InvalidGitRepositoryError
-
-        try:
-            b_name = GitRepo(
-                path,
-                search_parent_directories=True
-            ).active_branch.name
-            LOGGER.info('Deriving environment name from git branch %s...',
-                        b_name)
-            return get_env_from_branch(b_name)
-        except InvalidGitRepositoryError:
-            pass
-    LOGGER.info('Deriving environment name from directory %s...', path)
-    return get_env_from_directory(os.path.basename(path))
 
 
 def path_is_current_dir(path):
@@ -301,26 +233,8 @@ def echo_detected_environment(env_name, env_vars):
     LOGGER.info("")
 
 
-class Env(Base):
+class ModulesCommand(RunwayCommand):
     """Env deployment class."""
-
-    def gitclean(self):
-        """Execute git clean to remove untracked/build files."""
-        clean_cmd = ['git', 'clean', '-X', '-d']
-        if 'CI' not in os.environ:
-            print('The following files/directories will be deleted:')
-            print('')
-            print(check_output(clean_cmd + ['-n']).decode())
-            if not strtobool(input('Proceed?: ')):
-                return False
-        check_call(clean_cmd + ['-f'])
-        empty_dirs = self.get_empty_dirs(self.env_root)
-        if empty_dirs != []:
-            print('Now removing empty directories:')
-        for directory in empty_dirs:
-            print("Removing %s/" % directory)
-            shutil.rmtree(os.path.join(self.env_root, directory))
-        return True
 
     def run(self, deployments=None, command='plan'):  # noqa pylint: disable=too-many-branches,too-many-statements
         """Execute apps/code command."""
