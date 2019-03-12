@@ -10,6 +10,8 @@ from .runway import whichenv  # noqa
 from .modules import deploy # noqa
 from .modules import destroy # noqa
 from .modules import dismantle # noqa
+from .modules import info  # noqa
 from .modules import plan  # noqa
+from .modules import show  # noqa
 from .modules import takeoff   # noqa
 from .modules import taxi  # noqa

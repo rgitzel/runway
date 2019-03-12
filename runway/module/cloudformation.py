@@ -150,3 +150,7 @@ class CloudFormation(RunwayModule):
     def destroy(self):
         """Run stacker destroy."""
         self.run_stacker(command='destroy')
+
+    def info(self):
+        """Run stacker info."""
+        self.run_stacker(command='info')

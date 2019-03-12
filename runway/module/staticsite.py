@@ -158,3 +158,7 @@ class StaticSite(RunwayModule):
             LOGGER.info("Skipping staticsite destroy of %s; no environment "
                         "config found for this environment/region",
                         self.name)
+
+    def info(self):
+        """Skip info."""
+        LOGGER.info('Info not currently supported for staticsite')

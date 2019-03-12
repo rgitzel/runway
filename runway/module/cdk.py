@@ -164,3 +164,7 @@ class CloudDevelopmentKit(RunwayModule):
     def destroy(self):
         """Run cdk destroy."""
         self.run_cdk(command='destroy')
+
+    def info(self):
+        """Skip info."""
+        LOGGER.info('Info not currently supported for CDK')

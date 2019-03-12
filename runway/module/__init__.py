@@ -75,6 +75,10 @@ class RunwayModule(object):  # noqa pylint: disable=too-many-instance-attributes
         """Implement dummy method (set in consuming classes)."""
         raise NotImplementedError('You must implement the destroy() method yourself!')
 
+    def info(self):
+        """Implement dummy method (set in consuming classes)."""
+        raise NotImplementedError('You must implement the info() method yourself!')
+
 
 class RunwayModuleFolder(object):
     """Functions to manage filesystem access in a module folder."""

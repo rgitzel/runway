@@ -216,7 +216,8 @@ class Terraform(RunwayModule):
 
         if workspace_tfvar_present:
             tf_cmd.append("-var-file=%s" % workspace_tfvars_file)
-        if self.environment_options:
+
+        if (command != 'show') and self.environment_options:
             for (key, val) in self.environment_options.items():
                 tf_cmd.extend(['-var', "%s=%s" % (key, val)])
 
@@ -245,7 +246,7 @@ class Terraform(RunwayModule):
                     env=self.context.env_vars
                 ).strip().decode()
                 if current_tf_workspace != self.context.env_name:
-                    LOGGER.info("Terraform workspace currently set to %s; "
+                    LOGGER.info("Terraform workspace currently set to '%s'; "
                                 "switching to %s...",
                                 current_tf_workspace,
                                 self.context.env_name)
@@ -297,7 +298,7 @@ class Terraform(RunwayModule):
                 else:
                     LOGGER.info('Skipping "terraform get" due to '
                                 '"SKIP_TF_GET" environment variable...')
-                LOGGER.info("Running Terraform %s on %s (\"%s\")",
+                LOGGER.info("Running 'terraform %s' on %s (\"%s\")",
                             command,
                             self.name,
                             " ".join(tf_cmd))
@@ -327,3 +328,7 @@ class Terraform(RunwayModule):
     def destroy(self):
         """Run tf destroy."""
         self.run_terraform(command='destroy')
+
+    def info(self):
+        """Run tf info."""
+        self.run_terraform(command='show')

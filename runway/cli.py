@@ -6,6 +6,7 @@ Usage:
   runway (plan|taxi)
   runway (deploy|takeoff)
   runway (destroy|dismantle)
+  runway (info|show)
   runway init
   runway gitclean
   runway gen-sample (cfn|sls-tsc|tf|stacker|cdk|cdk-py|sls)

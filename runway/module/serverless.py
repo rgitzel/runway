@@ -130,3 +130,7 @@ class Serverless(RunwayModule):
     def destroy(self):
         """Run serverless remove."""
         self.run_serverless(command='remove')
+
+    def info(self):
+        """Run serverless info."""
+        self.run_serverless(command='info')
