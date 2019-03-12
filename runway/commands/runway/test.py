@@ -5,10 +5,7 @@ import os
 import sys
 
 from subprocess import check_call, check_output
-
-from subprocess import CalledProcessError as called_process_error
-
-from ..runway_command import RunwayCommand
+from subprocess import CalledProcessError
 
 # from stacker.util import parse_cloudformation_template
 # parse_cloudformation_template wraps yaml_parse; it would be better to call it
@@ -102,7 +99,7 @@ class Test(RunwayCommand):
 
     def python_tests(self, base_dir=None, pylint_rc_file=None):  # noqa pylint: disable=too-many-branches,too-many-locals
         """Run python tests."""
-        from pylint.lint import Run as pylint_run
+        from pylint.lint import Run
 
         if base_dir is None:
             base_dir = self.env_root
@@ -141,7 +138,7 @@ class Test(RunwayCommand):
                 with ignore_exit_code_0():
                     LOGGER.debug("Executing pylint with the following options: \"%s\"",  # noqa
                                  ' '.join(pylint_config + nonblueprint_files + blueprint_files))  # noqa pylint: disable=line-too-long
-                    pylint_run(pylint_config + nonblueprint_files + blueprint_files)  # noqa
+                    Run(pylint_config + nonblueprint_files + blueprint_files)  # noqa
             LOGGER.info('pylint complete.')
             for filepath in blueprint_files:
                 try:
@@ -172,7 +169,7 @@ class Test(RunwayCommand):
                 check_call([sys.executable,
                             '-c',
                             "import sys;from cfnlint.__main__ import main;sys.argv = ['cfn-lint'];sys.exit(main())"])  # noqa pylint: disable=line-too-long
-            except called_process_error:
+            except CalledProcessError:
                 sys.exit(1)
             LOGGER.info('cfn-lint complete')
         else:
