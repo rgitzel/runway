@@ -329,7 +329,8 @@ class ModulesCommand(RunwayCommand):
                                            self.runway_config.get('ignore_git_branch', False)),
                           env_region=None,
                           env_root=self.env_root,
-                          env_vars=os.environ.copy())
+                          env_vars=os.environ.copy(),
+                          project_name=self.runway_config.get('name'))
         echo_detected_environment(context.env_name, context.env_vars)
 
         if command == 'destroy':

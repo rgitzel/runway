@@ -98,11 +98,19 @@ class CloudFormation(RunwayModule):
         stacker_env_file_present = os.path.isfile(
             os.path.join(self.path, stacker_env_file)
         )
+
         if isinstance(self.options.get('environments',
                                        {}).get(self.context.env_name),
                       dict):
             for (key, val) in self.options['environments'][self.context.env_name].items():  # noqa
                 stacker_cmd.extend(['-e', "%s=%s" % (key, val)])
+
+        if self.context.project_name:
+            stacker_cmd.extend(['-e', "%s=%s" %
+                                ('runway_project_name', self.context.project_name)])
+        stacker_cmd.extend(['-e', "%s=%s" %
+                            ('runway_environment_name', self.context.env_name)])
+
         if stacker_env_file_present:
             stacker_cmd.append(stacker_env_file)
 
@@ -138,7 +146,7 @@ class CloudFormation(RunwayModule):
                         ensure_stacker_compat_config(
                             os.path.join(self.path, name)
                         )
-                        LOGGER.info("Running stacker %s on %s in region %s",
+                        LOGGER.info("Running stacker %s on '%s' in region %s",
                                     command,
                                     name,
                                     self.context.env_region)
@@ -147,7 +155,7 @@ class CloudFormation(RunwayModule):
                             get_embedded_lib_path()
                         )
                         stacker_cmd_list = [sys.executable, '-c']
-                        LOGGER.debug(
+                        LOGGER.info(
                             "Stacker command being executed: %s \"%s\"",
                             ' '.join(stacker_cmd_list),
                             stacker_cmd_str
