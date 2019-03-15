@@ -324,12 +324,11 @@ class ModulesCommand(RunwayCommand):
     def run(self, deployments=None, command='plan'):  # noqa pylint: disable=too-many-branches,too-many-statements
         """Execute apps/code command."""
         if deployments is None:
-            deployments = self.runway_config['deployments']
+            deployments = self.runway_config.deployments
         context = Context(options=self.options,
                           env_name=get_env(
                               self.env_root,
-                              self.runway_config.get('ignore_git_branch',
-                                                     False)
+                              self.runway_config.ignore_git_branch
                           ),
                           env_region=None,
                           env_root=self.env_root,
@@ -366,10 +365,10 @@ class ModulesCommand(RunwayCommand):
             LOGGER.info("")
             LOGGER.info("======= Processing deployment %d ===========================", i)
 
-            if deployment.get('regions'):
-                if deployment.get('env_vars'):
+            if deployment.regions:
+                if deployment.env_vars:
                     deployment_env_vars = get_deployment_env_vars(context.env_name,
-                                                                  deployment['env_vars'],
+                                                                  deployment.env_vars,
                                                                   self.env_root)
                     if deployment_env_vars:
                         LOGGER.info("OS environment variable overrides being "
@@ -398,29 +397,29 @@ class ModulesCommand(RunwayCommand):
                     if deployment.get('account-id') or (deployment.get('account-alias')):
                         validate_account_credentials(deployment, context)
 
-                    modules = deployment.get('modules', [])
+                    modules = deployment.modules
                     if deployment.get('current_dir'):
                         modules.append('.' + os.sep)
                     for module in modules:
                         module_opts = {}
-                        if deployment.get('environments'):
+                        if deployment.environments:
                             module_opts['environments'] = deployment['environments'].copy()  # noqa
-                        if deployment.get('module_options'):
-                            module_opts['options'] = deployment['module_options'].copy()  # noqa
-                        if isinstance(module, six.string_types):
-                            module = {'path': module}
-                        if path_is_current_dir(module['path']):
+                        # if deployment.get('module_options'):
+                        #     module_opts['options'] = deployment['module_options'].copy()  # noqa
+                        # if isinstance(module, six.string_types):
+                        #     module = {'path': module}
+                        if path_is_current_dir(module.path):
                             module_root = self.env_root
                         else:
-                            module_root = os.path.join(self.env_root, module['path'])
+                            module_root = os.path.join(self.env_root, module.path)
                         module_opts = merge_dicts(module_opts, module)
                         module_opts = load_module_opts_from_file(module_root, module_opts)
-                        if deployment.get('skip-npm-ci'):
-                            module_opts['skip_npm_ci'] = True
+                        # if deployment.get('skip-npm-ci'):
+                        #     module_opts['skip_npm_ci'] = True
 
                         LOGGER.info("")
                         LOGGER.info("---- Processing module '%s' for '%s' in %s --------------",
-                                    module['path'],
+                                    module.path,
                                     context.env_name,
                                     region)
                         LOGGER.info("Module options: %s", module_opts)
@@ -433,8 +432,8 @@ class ModulesCommand(RunwayCommand):
                                 ),
                                 command)()
 
-                if deployment.get('assume-role'):
-                    post_deploy_assume_role(deployment['assume-role'], context)
+                # if deployment.get('assume-role'):
+                #     post_deploy_assume_role(deployment['assume-role'], context)
             else:
                 LOGGER.error('No region configured for any deployment')
                 sys.exit(1)
@@ -499,10 +498,10 @@ class ModulesCommand(RunwayCommand):
         selected_deploy = deployments[int(selected_index) - 1]
         if selected_deploy.get('current_dir', False):
             deployments_to_run.append(selected_deploy)
-        elif not selected_deploy.get('modules', []):
+        elif not selected_deploy.modules:
             LOGGER.error('No modules configured in selected deployment')
             sys.exit(1)
-        elif len(selected_deploy['modules']) == 1:
+        elif len(selected_deploy.modules) == 1:
             # No need to select a module in the deployment - there's only one
             if command == 'destroy':
                 LOGGER.info('(only one deployment detected; all modules '
@@ -514,7 +513,7 @@ class ModulesCommand(RunwayCommand):
             print('')
             print('Configured modules in deployment:')
             pretty_index = 1
-            for module in selected_deploy['modules']:
+            for module in selected_deploy.modules:
                 print("%s: %s" % (pretty_index, _module_menu_entry(module, env_name)))
                 pretty_index += 1
             print('')
@@ -532,8 +531,8 @@ class ModulesCommand(RunwayCommand):
                 LOGGER.error('Please select a valid number (or "all")')
                 sys.exit(1)
             else:
-                module_list = [selected_deploy['modules'][int(selected_index) - 1]]  # noqa
-                selected_deploy['modules'] = module_list
+                module_list = [selected_deploy.modules[int(selected_index) - 1]]  # noqa
+                selected_deploy.modules = module_list
                 deployments_to_run.append(selected_deploy)
 
         LOGGER.debug('Selected deployment is %s...', deployments_to_run)
@@ -543,7 +542,7 @@ class ModulesCommand(RunwayCommand):
 def _module_name_for_display(module):
     """Extract a name for the module."""
     if isinstance(module, dict):
-        return module['path']
+        return module.path
     return str(module)
 
 
@@ -551,13 +550,13 @@ def _module_menu_entry(module, environment_name):
     """Build a string to display in the 'select module' menu."""
     name = _module_name_for_display(module)
     if isinstance(module, dict):
-        environment_config = module.get('environments', {}).get(environment_name)
+        environment_config = module.environments.get(environment_name)
         return "%s (%s)" % (name, environment_config)
     return "%s" % (name)
 
 
 def _deployment_menu_entry(deployment):
     """Build a string to display in the 'select deployment' menu."""
-    paths = ", ".join([_module_name_for_display(module) for module in deployment['modules']])
-    regions = ", ".join(deployment.get('regions', []))
+    paths = ", ".join([_module_name_for_display(module) for module in deployment.modules])
+    regions = ", ".join(deployment.regions)
     return "%s (%s)" % (paths, regions)

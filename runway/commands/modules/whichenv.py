@@ -23,5 +23,4 @@ class WhichEnv(ModulesCommand):
 
         print(get_env(
             self.env_root,
-            self.runway_config.get('ignore_git_branch',
-                                   False)))
+            self.runway_config.ignore_git_branch))
