@@ -27,6 +27,7 @@ INSTALL_REQUIRES = [
     'pep8-naming',
     'future',
     'pyhcl',
+    'schematics',
     'six',
     'typing',
     'yamllint',
