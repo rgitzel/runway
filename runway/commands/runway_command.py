@@ -20,6 +20,9 @@ from ..util import (
 )
 from .. import __version__ as version
 
+from ..config.module_config import RunwayConfig
+
+
 LOGGER = logging.getLogger('runway')
 
 
@@ -264,7 +267,13 @@ class RunwayCommand(object):
                          self.runway_config_path)
             sys.exit(1)
         with open(self.runway_config_path) as data_file:
-            return yaml.safe_load(data_file)
+            data = yaml.safe_load(data_file)
+            try:
+                defn = RunwayConfig(data)
+                defn.validate()
+            except Exception as ex:
+                LOGGER.warn("validation errors: %s", ex)
+            return data
 
     @property
     def runway_config(self):
