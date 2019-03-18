@@ -260,18 +260,18 @@ def validate_account_credentials(deployment, context):
               'aws_session_token']:
         if context.env_vars.get(i.upper()):
             boto_args[i] = context.env_vars[i.upper()]
-    if isinstance(deployment.get('account-id'), (int, six.string_types)):
-        account_id = str(deployment['account-id'])
-    elif deployment.get('account-id', {}).get(context.env_name):
-        account_id = str(deployment['account-id'][context.env_name])
+    if isinstance(deployment.account_id, (int, six.string_types)):
+        account_id = str(deployment.account_id)
+    elif deployment.get.account_id.get(context.env_name):
+        account_id = str(deployment.account_id[context.env_name])
     else:
         account_id = None
     if account_id:
         validate_account_id(boto3.client('sts', **boto_args), account_id)
-    if isinstance(deployment.get('account-alias'), six.string_types):
-        account_alias = deployment['account-alias']
-    elif deployment.get('account-alias', {}).get(context.env_name):
-        account_alias = deployment['account-alias'][context.env_name]
+    if deployment.account_alias and isinstance(deployment.account_alias, six.string_types):
+        account_alias = deployment.account_alias
+    elif deployment.account_alias and deployment.account_alias.get(context.env_name):
+        account_alias = deployment.account_alias[context.env_name]
     else:
         account_alias = None
     if account_alias:
@@ -392,18 +392,19 @@ class ModulesCommand(RunwayCommand):
                         {'AWS_DEFAULT_REGION': context.env_region,
                          'AWS_REGION': context.env_region}
                     )
-                    if deployment.get('assume-role'):
-                        pre_deploy_assume_role(deployment['assume-role'], context)
-                    if deployment.get('account-id') or (deployment.get('account-alias')):
+                    if deployment.assume_role:
+                        pre_deploy_assume_role(deployment.assume_role, context)
+                    if deployment.account_id or deployment.account_alias:
                         validate_account_credentials(deployment, context)
 
                     modules = deployment.modules
-                    if deployment.get('current_dir'):
-                        modules.append('.' + os.sep)
+                    # NO SUCH KEY??
+                    # if deployment.get('current_dir'):
+                    #     modules.append('.' + os.sep)
                     for module in modules:
                         module_opts = {}
                         if deployment.environments:
-                            module_opts['environments'] = deployment['environments'].copy()  # noqa
+                            module_opts['environments'] = deployment.environments.copy()  # noqa
                         # if deployment.get('module_options'):
                         #     module_opts['options'] = deployment['module_options'].copy()  # noqa
                         # if isinstance(module, six.string_types):
@@ -414,8 +415,8 @@ class ModulesCommand(RunwayCommand):
                             module_root = os.path.join(self.env_root, module.path)
                         module_opts = merge_dicts(module_opts, module)
                         module_opts = load_module_opts_from_file(module_root, module_opts)
-                        # if deployment.get('skip-npm-ci'):
-                        #     module_opts['skip_npm_ci'] = True
+                        if deployment.skip_npm_ci:
+                            module_opts.skip_npm_ci = True
 
                         LOGGER.info("")
                         LOGGER.info("---- Processing module '%s' for '%s' in %s --------------",
@@ -432,8 +433,8 @@ class ModulesCommand(RunwayCommand):
                                 ),
                                 command)()
 
-                # if deployment.get('assume-role'):
-                #     post_deploy_assume_role(deployment['assume-role'], context)
+                if deployment.assume_role:
+                    post_deploy_assume_role(deployment.assume_role, context)
             else:
                 LOGGER.error('No region configured for any deployment')
                 sys.exit(1)
@@ -496,9 +497,9 @@ class ModulesCommand(RunwayCommand):
             sys.exit(1)
 
         selected_deploy = deployments[int(selected_index) - 1]
-        if selected_deploy.get('current_dir', False):
-            deployments_to_run.append(selected_deploy)
-        elif not selected_deploy.modules:
+        # if selected_deploy.get('current_dir', False):
+        #     deployments_to_run.append(selected_deploy)
+        if not selected_deploy.modules:
             LOGGER.error('No modules configured in selected deployment')
             sys.exit(1)
         elif len(selected_deploy.modules) == 1:
