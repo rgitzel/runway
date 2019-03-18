@@ -268,11 +268,11 @@ class RunwayCommand(object):
             sys.exit(1)
         with open(self.runway_config_path) as data_file:
             data = yaml.safe_load(data_file)
-            try:
-                defn = RunwayConfig(data)
-                defn.validate()
-            except Exception as ex:
-                LOGGER.warn("validation errors: %s", ex)
+            # try:
+            defn = RunwayConfig(data)
+            defn.validate()
+            # except Exception as ex:
+            #     LOGGER.warn("validation errors: %s", ex)
             return data
 
     @property
