@@ -4,6 +4,7 @@ from __future__ import print_function
 import glob
 import logging
 import os
+import schematics
 from subprocess import check_call, check_output
 from subprocess import CalledProcessError
 import sys
@@ -268,11 +269,11 @@ class RunwayCommand(object):
             sys.exit(1)
         with open(self.runway_config_path) as data_file:
             data = yaml.safe_load(data_file)
-            # try:
-            defn = RunwayConfig(data)
-            defn.validate()
-            # except Exception as ex:
-            #     LOGGER.warn("validation errors: %s", ex)
+            try:
+                defn = RunwayConfig(data)
+                defn.validate()
+            except de as schematics.exceptions.DataError:
+                LOGGER.warn("validation error: %s", de)
             return data
 
     @property
