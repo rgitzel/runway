@@ -272,7 +272,7 @@ class RunwayCommand(object):
             try:
                 defn = RunwayConfig(data)
                 defn.validate()
-            except de as schematics.exceptions.DataError:
+            except schematics.exceptions.DataError as de:
                 LOGGER.warn("validation error: %s", de)
             return data
 
