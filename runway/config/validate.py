@@ -2,7 +2,7 @@
 import sys
 import yaml
 
-from module_config import RunwayConfig
+from runway_config_schematic import RunwayConfig
 
 def main():
     troy1 = """
@@ -13,7 +13,7 @@ deployments:
       - us-east-1
     account-id:
       dev: TBD
-      prod: "363639951452"
+      prod: "003639951452"
   - modules:
       - update_public_template.cfn
     regions:

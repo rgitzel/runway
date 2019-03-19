@@ -1,6 +1,6 @@
 
 
-from module_config import ModuleDefinition, DeploymentDefinition
+from runway_config_schematic import ModuleDefinition, DeploymentDefinition
 
 def main():
     my_mod = {
