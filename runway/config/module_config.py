@@ -7,7 +7,7 @@ import six
 
 from schematics.exceptions import ValidationError
 from schematics.models import Model
-from schematics.types import BooleanType, DictType, ListType, LongType, ModelType, StringType
+from schematics.types import BooleanType, DictType, ListType, LongType, ModelType, StringType, UnionType
 
 
 VALID_REGIONS = [
@@ -52,13 +52,13 @@ class RegionType(StringType):
 
 
 ModuleEnvironmentConfigType = DictType(StringType)
-
+ModuleOptionsType = UnionType([StringType, ListType(StringType)])
 
 class ModuleDefinition(Model):
     class_path = StringType(required=False)
     environments = DictType(ModuleEnvironmentConfigType, required=False)
     name = StringType(required=False)
-    options = DictType(StringType, required=False)
+    options = DictType(ModuleOptionsType, required=False)
     path = StringType(required=True)
 
 
@@ -78,7 +78,7 @@ class DeploymentDefinition(Model):
     assume_role = DictType(StringType, required=False, serialized_name='assume-role')
     env_vars = DictType(ModuleEnvironmentConfigType, required=False)
     modules = ListType(StringOrModuleModelType(ModuleDefinition), required=True, min_size=1)
-    module_options = DictType(DictType(StringType), required=False)
+    module_options = DictType(ModuleOptionsType, required=False)
     regions = ListType(RegionType(), required=True, min_size=1)
     skip_npm_ci = BooleanType(required=False, default=False, serialized_name='skip-npm-ci')
 
