@@ -55,7 +55,12 @@ ModuleEnvironmentConfigType = DictType(StringType)
 
 
 class ModuleDefinition(Model):
+    class_path = StringType(required=False)
+    environments = DictType(ModuleEnvironmentConfigType, required=False)
+    name = StringType(required=False)
+    options = DictType(StringType, required=False)
     path = StringType(required=True)
+
 
 # each item in a deployment's list of modules can be either a string or a dict,
 #  which is difficult (if indeed possible) to define in a model... so instead
@@ -69,14 +74,13 @@ class StringOrModuleModelType(ModelType):
 
 class DeploymentDefinition(Model):
     account_alias = DictType(StringType, required=False)
-    account_id = DictType(LongType, required=False)
-    assume_role = DictType(StringType, required=False)
+    account_id = DictType(LongType, required=False, serialized_name='account-id')
+    assume_role = DictType(StringType, required=False, serialized_name='assume-role')
     env_vars = DictType(ModuleEnvironmentConfigType, required=False)
-    environments = DictType(ModuleEnvironmentConfigType, required=False)
     modules = ListType(StringOrModuleModelType(ModuleDefinition), required=True, min_size=1)
     module_options = DictType(DictType(StringType), required=False)
     regions = ListType(RegionType(), required=True, min_size=1)
-    skip_npm_ci = BooleanType(required=False, default=False)
+    skip_npm_ci = BooleanType(required=False, default=False, serialized_name='skip-npm-ci')
 
     def validate_account_alias(self, data, value):
         _check_dict_keys_are_valid_environment_names('account_alias', data, False)
