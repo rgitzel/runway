@@ -66,22 +66,30 @@ class StringOrModuleModelType(ModelType):
 
 
 class ModuleDefinition(Model):
+    # required
+    path            = StringType(                           required=True)
+
+    # optional
     class_path      = StringType(                           required=False)
     environments    = DictType(ModuleEnvironmentConfigType, required=False)
     name            = StringType(                           required=False)
     options         = DictType(ModuleOptionsType,           required=False)
-    path            = StringType(                           required=True)
 
 
 class DeploymentDefinition(Model):
+    # required
+    modules         = ListType(StringOrModuleModelType(ModuleDefinition),   required=True,  min_size=1)
+    regions         = ListType(RegionType(),                                required=True,  min_size=1)
+
+    # optional
     account_alias   = DictType(StringType,                                  required=False)
     account_id      = DictType(LongType,                                    required=False, serialized_name='account-id')
     assume_role     = DictType(StringType,                                  required=False, serialized_name='assume-role')
     env_vars        = DictType(ModuleEnvironmentConfigType,                 required=False)
     environments    = DictType(ModuleEnvironmentConfigType,                 required=False)
-    modules         = ListType(StringOrModuleModelType(ModuleDefinition),   required=True,  min_size=1)
     module_options  = DictType(ModuleOptionsType,                           required=False)
-    regions         = ListType(RegionType(),                                required=True,  min_size=1)
+
+    # flags
     skip_npm_ci     = BooleanType(                                          default=False,  serialized_name='skip-npm-ci')
 
     def validate_environment_names(self, data, value):
@@ -97,7 +105,10 @@ class DeploymentDefinition(Model):
 
 
 class RunwayConfig(Model):
+    # required
     deployments         = ListType(ModelType(DeploymentDefinition), required=True, min_size=1)
+
+    # flags
     ignore_git_branch   = BooleanType(                              default=False)
 
 
