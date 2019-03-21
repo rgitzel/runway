@@ -10,34 +10,32 @@ import six
 
 from . import (
     RunwayModule, format_npm_command_for_logging, generate_node_command,
-    run_module_command, run_npm_install
+    run_module_command
 )
 from ..util import change_dir, run_commands, which
 
 LOGGER = logging.getLogger('runway')
 
 
-def cdk_module_matches_env(env_name, env_config, env_vars):
+def cdk_module_matches_env(env_config, env_vars):
     """Return bool on whether cdk command should continue in current env."""
-    if env_config.get(env_name):
-        current_env_config = env_config[env_name]
-        if isinstance(current_env_config, type(True)) and current_env_config:
-            return True
-        if isinstance(current_env_config, six.string_types):
-            (account_id, region) = current_env_config.split('/')
-            if region == env_vars['AWS_DEFAULT_REGION']:
-                boto_args = {}
-                for i in ['aws_access_key_id', 'aws_secret_access_key',
-                          'aws_session_token']:
-                    if env_vars.get(i.upper()):
-                        boto_args[i] = env_vars[i.upper()]
-                sts_client = boto3.client(
-                    'sts',
-                    region_name=env_vars['AWS_DEFAULT_REGION'],
-                    **boto_args
-                )
-                if sts_client.get_caller_identity()['Account'] == account_id:
-                    return True
+    if isinstance(env_config, type(True)) and env_config:
+        return True
+    if isinstance(env_config, six.string_types):
+        (account_id, region) = env_config.split('/')
+        if region == env_vars['AWS_DEFAULT_REGION']:
+            boto_args = {}
+            for i in ['aws_access_key_id', 'aws_secret_access_key',
+                      'aws_session_token']:
+                if env_vars.get(i.upper()):
+                    boto_args[i] = env_vars[i.upper()]
+            sts_client = boto3.client(
+                'sts',
+                region_name=env_vars['AWS_DEFAULT_REGION'],
+                **boto_args
+            )
+            if sts_client.get_caller_identity()['Account'] == account_id:
+                return True
     return False
 
 
@@ -70,20 +68,16 @@ class CloudDevelopmentKit(RunwayModule):
         if 'DEBUG' in self.context.env_vars:
             cdk_opts.append('-v')  # Increase logging if requested
 
-        if cdk_module_matches_env(self.context.env_name,
-                                  self.options.get('environments', {}),
+        if cdk_module_matches_env(self.config.effective_environment(),
                                   self.context.env_vars):
             if self.folder.isfile('package.json'):
                 with change_dir(self.path):
-                    run_npm_install(self.path, self.options, self.context)
-                    if self.options.get('options', {}).get('build_steps',
-                                                           []):
+                    self.run_npm_install()
+                    if self.config.build_steps:
                         LOGGER.info("Running build steps for %s...",
                                     os.path.basename(self.path))
                         run_commands(
-                            commands=self.options.get('options',
-                                                      {}).get('build_steps',
-                                                              []),
+                            commands=self.config.build_steps,
                             directory=self.path,
                             env=self.context.env_vars
                         )

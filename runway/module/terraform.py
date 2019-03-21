@@ -44,24 +44,6 @@ def get_backend_tfvars_file(path, environment, region):
     return backend_filenames[-1]  # file not found; fallback to last item
 
 
-def gen_workspace_tfvars_files(environment, region):
-    """Generate possible Terraform workspace tfvars filenames."""
-    return [
-        # Give preference to explicit environment-region files
-        "%s-%s.tfvars" % (environment, region),
-        # Fallback to environment name only
-        "%s.tfvars" % environment
-    ]
-
-
-def get_workspace_tfvars_file(path, environment, region):
-    """Determine Terraform workspace-specific tfvars file name."""
-    for name in gen_workspace_tfvars_files(environment, region):
-        if os.path.isfile(os.path.join(path, name)):
-            return name
-    return "%s.tfvars" % environment  # fallback to generic name
-
-
 def remove_stale_tf_config(path, backend_options):
     """Ensure TF is ready for init.
 
@@ -184,6 +166,20 @@ def run_tfenv_install(path, env_vars):
 class Terraform(RunwayModule):
     """Terraform Runway Module."""
 
+    @classmethod
+    def environment_file_extension(cls):
+        """Specify what kinds of environment file the module expects."""
+        return "tfvars"
+
+    def _use_tfvars_file(self, tf_cmd, environment_name, region=None):
+        tfvars_file = self.folder.locate_env_file_for(environment_name, region, "tfvars")
+        if tfvars_file:
+            LOGGER.info("using workspace file '%s'", tfvars_file)
+            tf_cmd.append("-var-file=%s" % tfvars_file)
+            return True
+        return False
+
+
     def run_terraform(self, command='plan'):  # noqa pylint: disable=too-many-branches,too-many-statements
         """Run Terraform."""
         response = {'skipped_configs': False}
@@ -202,29 +198,35 @@ class Terraform(RunwayModule):
             else:
                 tf_cmd.append('-auto-approve=false')
 
-        workspace_tfvars_file = get_workspace_tfvars_file(self.path,
-                                                          self.context.env_name,  # noqa
-                                                          self.context.env_region)  # noqa
-
         backend_options = {
             'filename': get_backend_tfvars_file(self.path,
                                                 self.context.env_name,
                                                 self.context.env_region)
         }
-        if self.options.get('options', {}).get('terraform_backend_config'):
-            backend_options['config'] = self.options.get('options').get(
-                'terraform_backend_config'
-            )
+        if self.config.terraform_backend_config:
+            backend_options['config'] = self.config.options['terraform_backend_config']
 
-        workspace_tfvar_present = self.folder.isfile(workspace_tfvars_file)
-
-        if workspace_tfvar_present:
-            tf_cmd.append("-var-file=%s" % workspace_tfvars_file)
-        if self.environment:
-            for (key, val) in self.environment.items():
+        environment_config = self.config.effective_environment()
+        LOGGER.info("config from runway.yml: %s", environment_config)
+        if environment_config:
+            for (key, val) in environment_config.items():
                 tf_cmd.extend(['-var', "%s=%s" % (key, val)])
 
-        if self.environment or workspace_tfvar_present:
+        environment_tfvars_file = self._use_tfvars_file(tf_cmd,
+                                                        self.context.env_name)
+
+        if self.context.project_name:
+            tf_cmd.extend(['-var', "%s=%s" % (self.PROJECT_NAME_KEY, self.context.project_name)])
+        tf_cmd.extend(['-var', "%s=%s" % (self.ENVIRONMENT_NAME_KEY, self.context.env_name)])
+
+        region_tfvars_file = self._use_tfvars_file(tf_cmd,
+                                                   self.context.env_name,
+                                                   self.context.env_region)
+
+        if not environment_tfvars_file and not region_tfvars_file:
+            LOGGER.info("no appropriate .tfvars files found")
+
+        if self.config.environment_specified() or environment_tfvars_file or region_tfvars_file:
             LOGGER.info("Preparing to run terraform %s on %s...",
                         command,
                         os.path.basename(self.path))
@@ -301,6 +303,7 @@ class Terraform(RunwayModule):
                 else:
                     LOGGER.info('Skipping "terraform get" due to '
                                 '"SKIP_TF_GET" environment variable...')
+                    LOGGER.info("")
                 LOGGER.info("Running Terraform %s on %s (\"%s\")",
                             command,
                             os.path.basename(self.path),
@@ -312,12 +315,13 @@ class Terraform(RunwayModule):
             LOGGER.info("Skipping Terraform %s of %s",
                         command,
                         os.path.basename(self.path))
-            LOGGER.info(
-                "(no tfvars file for this environment/region found -- looking "
-                "for one of \"%s\")",
-                ', '.join(gen_workspace_tfvars_files(
-                    self.context.env_name,
-                    self.context.env_region)))
+            LOGGER.info("")
+            # LOGGER.info(
+            #     "(no tfvars file for this environment/region found -- looking "
+            #     "for one of \"%s\")",
+            #     ', '.join(gen_workspace_tfvars_files(
+            #         self.context.env_name,
+            #         self.context.env_region)))
         return response
 
     def plan(self):

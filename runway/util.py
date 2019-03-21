@@ -87,8 +87,8 @@ def merge_dicts(dict1, dict2, deep_merge=True):
 # thus we can't rely on `dict.get(key, default)` as it will return `None`
 #  instead of default in those cases :-(
 #
-# not that empty YAML nodes is something we should encourage, but at least using the function
-#  saves a lot of None checking
+# not that value-less nodes are something we should encourage, but at least
+#  using this function saves us from None errors
 #
 def better_dict_get(dict1, key, default):
     """Return the default even if the key exists but the value is None."""

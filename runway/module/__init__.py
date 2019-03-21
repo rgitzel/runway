@@ -9,7 +9,7 @@ import sys
 import json
 import yaml
 
-from ..util import which, better_dict_get
+from ..util import which
 
 LOGGER = logging.getLogger('runway')
 NPM_BIN = 'npm.cmd' if platform.system().lower() == 'windows' else 'npm'
@@ -79,28 +79,17 @@ def use_npm_ci(path):
     return False
 
 
-def run_npm_install(path, options, context):
-    """Run npm install/ci."""
-    # Use npm ci if available (npm v5.7+)
-    if options.get('skip_npm_ci'):
-        LOGGER.info("Skipping npm ci or npm install on %s...",
-                    os.path.basename(path))
-    elif context.env_vars.get('CI') and use_npm_ci(path):  # noqa
-        LOGGER.info("Running npm ci on %s...",
-                    os.path.basename(path))
-        subprocess.check_call([NPM_BIN, 'ci'])
-    else:
-        LOGGER.info("Running npm install on %s...",
-                    os.path.basename(path))
-        subprocess.check_call([NPM_BIN, 'install'])
-
-
 class RunwayModule(object):
     """Base class for Runway modules."""
 
-    def __init__(self, context, path, options=None):
+    ENVIRONMENT_NAME_KEY = "runway_environment_name"
+    PROJECT_NAME_KEY = "runway_project_name"
+
+    def __init__(self, context, path, config):
         """Initialize base class."""
         self.name = os.path.basename(path)
+        for ext in [".cdk", ".cfn", ".sls", ".sts", ".tf"]:
+            self.name = self.name.replace(ext, "")
 
         self.context = context
 
@@ -110,34 +99,36 @@ class RunwayModule(object):
 
         self.folder = RunwayModuleFolder(path)
 
-        if options is None:
-            self.options = {}
-        else:
-            self.options = options
+        self.config = config
 
-        self.environment = better_dict_get(self.options, 'environments', {}).get(context.env_name)
-        if self.environment is not None:
-            # a boolean indicates we want (or don't want) the module, and we have no values to set
-            if isinstance(self.environment, bool):
-                if self.environment:
-                    self.environment = {}
-                else:
-                    self.environment = None
+    @classmethod
+    def environment_file_extension(cls):
+        """Specify what kinds of environment file the module expects."""
+        return "yml"
 
     def plan(self):
         """Implement dummy method (set in consuming classes)."""
-        raise NotImplementedError('You must implement the plan() method '
-                                  'yourself!')
+        raise NotImplementedError('You must implement the plan() method yourself!')
 
     def deploy(self):
         """Implement dummy method (set in consuming classes)."""
-        raise NotImplementedError('You must implement the deploy() method '
-                                  'yourself!')
+        raise NotImplementedError('You must implement the deploy() method yourself!')
 
     def destroy(self):
         """Implement dummy method (set in consuming classes)."""
-        raise NotImplementedError('You must implement the destroy() method '
-                                  'yourself!')
+        raise NotImplementedError('You must implement the destroy() method yourself!')
+
+    def run_npm_install(self):
+        """Run npm install/ci."""
+        # Use npm ci if available (npm v5.7+)
+        if self.config.skip_npm_ci:
+            LOGGER.info("Skipping npm ci or npm install on %s...", self.name)
+        elif self.context.env_vars.get('CI') and use_npm_ci(self.context.path):  # noqa
+            LOGGER.info("Running npm ci on %s...", self.name)
+            subprocess.check_call([NPM_BIN, 'ci'])
+        else:
+            LOGGER.info("Running npm install on %s...", self.name)
+            subprocess.check_call([NPM_BIN, 'install'])
 
 
 class RunwayModuleFolder(object):
@@ -175,6 +166,15 @@ class RunwayModuleFolder(object):
             env_names = [os.path.join('env', name) for name in names]
             location = self.locate_file(env_names)
         return location
+
+    def locate_env_file_for(self, environment_name, region, extension):
+        """Try to find a file for the given environment and region."""
+        names = []
+        if region:
+            names.append("%s-%s.%s" % (environment_name, region, extension))
+        else:
+            names.append("%s.%s" % (environment_name, extension))
+        return self.locate_env_file(names)
 
     def load_json_file(self, name):
         """Load the contents of the JSON file into a dict."""

@@ -8,7 +8,7 @@ import sys
 
 from . import (
     RunwayModule, format_npm_command_for_logging, generate_node_command,
-    run_module_command, run_npm_install
+    run_module_command
 )
 from ..util import change_dir, which
 
@@ -79,16 +79,19 @@ class Serverless(RunwayModule):
         sls_opts.extend(['--stage', self.context.env_name])
 
         sls_env_file = self.get_sls_config_file()
+        sls_env_file_exists = sls_env_file and self.folder.isfile(sls_env_file)
 
         sls_cmd = generate_node_command(command='sls',
                                         command_opts=sls_opts,
                                         path=self.path)
 
+        LOGGER.info("config from runway.yml: %s", self.config.effective_environment())
+
         # for now, an environment file merely need exist, we don't read it
-        if self.environment or (sls_env_file and self.folder.isfile(sls_env_file)):  # noqa
+        if self.config.environment_specified() or sls_env_file_exists:  # noqa
             if self.folder.isfile('package.json'):
                 with change_dir(self.path):
-                    run_npm_install(self.path, self.options, self.context)
+                    self.run_npm_install()
                     LOGGER.info("Running sls %s on %s (\"%s\")",
                                 command,
                                 self.name,
@@ -98,8 +101,11 @@ class Serverless(RunwayModule):
                         # the first
                         run_sls_remove(sls_cmd, self.context.env_vars)
                     else:
-                        run_module_command(cmd_list=sls_cmd,
-                                           env_vars=self.context.env_vars)
+                        env_vars = self.context.env_vars.copy()
+                        env_vars[self.ENVIRONMENT_NAME_KEY] = self.context.env_name
+                        env_vars[self.PROJECT_NAME_KEY] = self.context.project_name
+
+                        run_module_command(cmd_list=sls_cmd, env_vars=env_vars)
             else:
                 LOGGER.warning(
                     "Skipping 'serverless %s' for %s; no \"package.json\" "

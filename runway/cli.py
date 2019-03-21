@@ -3,9 +3,9 @@ Runway Overview.
 
 Usage:
   runway (test|preflight)
-  runway (plan|taxi)
-  runway (deploy|takeoff)
-  runway (destroy|dismantle)
+  runway (plan|taxi) [--dry-run]
+  runway (deploy|takeoff) [--dry-run]
+  runway (destroy|dismantle) [--dry-run]
   runway init
   runway gitclean
   runway gen-sample (cfn|sls-tsc|tf|stacker|cdk|sls)
@@ -16,6 +16,7 @@ Usage:
 Options:
   -h --help                         Show this screen.
   --version                         Show version.
+  --dry-run                         Don't actually perform the command, just show what would be done.  # noqa pylint: disable=line-too-long
 
 Help:
   * Set the DEPLOY_ENVIRONMENT environment variable to set/override the

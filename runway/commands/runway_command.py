@@ -30,6 +30,16 @@ class RunwayCommand(object):
         """Initialize base class."""
         self._cli_arguments = cli_arguments
 
+        self._is_dry_run = cli_arguments.get("--dry-run", False)
+        if self._is_dry_run:
+            LOGGER.warn("")
+            LOGGER.warn("")
+            LOGGER.warn("** EXECUTING IN DRY RUN MODE - NO CHANGES WILL BE MADE **")
+            LOGGER.warn("** EXECUTING IN DRY RUN MODE - NO CHANGES WILL BE MADE **")
+            LOGGER.warn("** EXECUTING IN DRY RUN MODE - NO CHANGES WILL BE MADE **")
+            LOGGER.warn("")
+            LOGGER.warn("")
+
         if env_root is None:
             self.env_root = os.getcwd()
         else:

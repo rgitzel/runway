@@ -39,6 +39,11 @@ def make_stacker_cmd_string(args, lib_path):
 class CloudFormation(RunwayModule):
     """CloudFormation (Stacker) Runway Module."""
 
+    @classmethod
+    def environment_file_extension(cls):
+        """Specify what kinds of environment file the module expects."""
+        return "env"
+
     def gen_stacker_env_files(self):
         """Generate possible Stacker environment filenames."""
         return [
@@ -68,19 +73,6 @@ class CloudFormation(RunwayModule):
                              config_filename)
                 sys.exit(1)
 
-    def gen_stacker_env_files(self):
-        """Generate possible Stacker environment filenames."""
-        return [
-            # Give preference to explicit environment-region files
-            "%s-%s.env" % (self.context.env_name, self.context.env_region),
-            # Fallback to environment name only
-            "%s.env" % self.context.env_name
-        ]
-
-    def get_stacker_env_file(self):
-        """Determine Stacker environment file name."""
-        return self.folder.locate_file(self.gen_stacker_env_files())
-
     def run_stacker(self, command='diff'):  # pylint: disable=too-many-branches
         """Run Stacker."""
         response = {'skipped_configs': False}
@@ -97,58 +89,66 @@ class CloudFormation(RunwayModule):
         if 'DEBUG' in self.context.env_vars:
             stacker_cmd.append('--verbose')  # Increase logging if requested
 
-        if self.environment:
-            for (key, val) in self.environment.items():
+        environment_config = self.config.effective_environment()
+        LOGGER.info("config from runway.yml: %s", environment_config)
+        if environment_config:
+            for (key, val) in environment_config.items():
                 stacker_cmd.extend(['-e', "%s=%s" % (key, val)])
+
+        if self.context.project_name:
+            stacker_cmd.extend(['-e', "%s=%s" %
+                                (self.PROJECT_NAME_KEY, self.context.project_name)])
+        stacker_cmd.extend(['-e', "%s=%s" %
+                            (self.ENVIRONMENT_NAME_KEY, self.context.env_name)])
 
         stacker_env_file = self.get_stacker_env_file()
         if stacker_env_file:
             stacker_cmd.append(stacker_env_file)
 
-        with change_dir(self.path):
-            # Iterate through any stacker yaml configs to deploy them in order
-            # or destroy them in reverse order
-            for _root, _dirs, files in os.walk(self.path):
-                for name in (
-                        reversed(sorted(files))
-                        if command == 'destroy'
-                        else sorted(files)):
-                    if re.match(r"runway(\..*)?\.yml", name) or (
-                            name.startswith('.')):
-                        # Hidden files (e.g. .gitlab-ci.yml) or runway configs
-                        # definitely aren't stacker config files
-                        continue
-                    if os.path.splitext(name)[1] in ['.yaml', '.yml']:
-                        if not (stacker_env_file or self.environment):
-                            response['skipped_configs'] = True
-                            LOGGER.info(
-                                "Skipping stacker %s of %s; no environment "
-                                "file found for this environment/region "
-                                "(looking for one of \"%s\")",
-                                command,
-                                name,
-                                ', '.join(self.gen_stacker_env_files()))
+        if not (stacker_env_file or self.config.environment_specified()):
+            response['skipped_configs'] = True
+            LOGGER.info(
+                "Skipping stacker %s; no configuration found for "
+                "environment '%s' and region '%s'",
+                command,
+                self.context.env_name,
+                self.context.env_region
+            )
+        else:
+            with change_dir(self.path):
+                # Iterate through any stacker yaml configs to deploy them in order
+                # or destroy them in reverse order
+                for _root, _dirs, files in os.walk(self.path):
+                    for name in (
+                            reversed(sorted(files))
+                            if command == 'destroy'
+                            else sorted(files)):
+                        if re.match(r"runway(\..*)?\.yml", name) or (
+                                name.startswith('.')):
+                            # Hidden files (e.g. .gitlab-ci.yml) or runway configs
+                            # definitely aren't stacker config files
                             continue
-                        self.ensure_stacker_compat_config(name)
-                        LOGGER.info("Running stacker %s on %s in region %s",
-                                    command,
-                                    name,
-                                    self.context.env_region)
-                        stacker_cmd_str = make_stacker_cmd_string(
-                            stacker_cmd + [name],
-                            get_embedded_lib_path()
-                        )
-                        stacker_cmd_list = [sys.executable, '-c']
-                        LOGGER.debug(
-                            "Stacker command being executed: %s \"%s\"",
-                            ' '.join(stacker_cmd_list),
-                            stacker_cmd_str
-                        )
-                        run_module_command(
-                            cmd_list=stacker_cmd_list + [stacker_cmd_str],
-                            env_vars=self.context.env_vars
-                        )
-                break  # only need top level files
+                        if os.path.splitext(name)[1] in ['.yaml', '.yml']:
+                            self.ensure_stacker_compat_config(name)
+                            LOGGER.info("Running stacker %s on %s in region %s",
+                                        command,
+                                        name,
+                                        self.context.env_region)
+                            stacker_cmd_str = make_stacker_cmd_string(
+                                stacker_cmd + [name],
+                                get_embedded_lib_path()
+                            )
+                            stacker_cmd_list = [sys.executable, '-c']
+                            LOGGER.debug(
+                                "Stacker command being executed: %s \"%s\"",
+                                ' '.join(stacker_cmd_list),
+                                stacker_cmd_str
+                            )
+                            run_module_command(
+                                cmd_list=stacker_cmd_list + [stacker_cmd_str],
+                                env_vars=self.context.env_vars
+                            )
+                    break  # only need top level files
         return response
 
     def plan(self):

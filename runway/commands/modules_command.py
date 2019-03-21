@@ -21,6 +21,8 @@ import six
 import yaml
 
 from .runway_command import RunwayCommand
+from ..module import RunwayModuleFolder
+from ..config.module_config import ModuleConfig
 from ..context import Context
 from ..util import change_dir, load_object_from_string, merge_dicts
 
@@ -51,34 +53,40 @@ def assume_role(role_arn, session_name=None, duration_seconds=None,
             'AWS_SESSION_TOKEN': response['Credentials']['SessionToken']}
 
 
-def determine_module_class(path, module_options):
+def determine_module_class(path, class_path):
     """Determine type of module and return deployment module class."""
-    if not module_options.get('class_path'):
+    pkg = 'runway.module.'
+    if not class_path:
         # First check directory name for type-indicating suffix
-        if os.path.basename(path).endswith('.sls'):
-            module_options['class_path'] = 'runway.module.serverless.Serverless'  # noqa
-        elif os.path.basename(path).endswith('.tf'):
-            module_options['class_path'] = 'runway.module.terraform.Terraform'
-        elif os.path.basename(path).endswith('.cdk'):
-            module_options['class_path'] = 'runway.module.cdk.CloudDevelopmentKit'  # noqa
-        elif os.path.basename(path).endswith('.cfn'):
-            module_options['class_path'] = 'runway.module.cloudformation.CloudFormation'  # noqa
+        basename = os.path.basename(path)
+        if basename.endswith('.cdk'):
+            class_path = pkg + 'cdk.CloudDevelopmentKit'
+        elif basename.endswith('.cfn'):
+            class_path = pkg + 'cloudformation.CloudFormation'
+        elif basename.endswith('.sls'):
+            class_path = pkg + 'serverless.Serverless'
+        elif basename.endswith('.sts'):
+            class_path = pkg + 'staticsite.StaticSite'
+        elif basename.endswith('.tf'):
+            class_path = pkg + 'terraform.Terraform'
+
+    if not class_path:
         # Fallback to autodetection
-        elif os.path.isfile(os.path.join(path,
-                                         'serverless.yml')):
-            module_options['class_path'] = 'runway.module.serverless.Serverless'  # noqa
-        elif glob.glob(os.path.join(path, '*.tf')):
-            module_options['class_path'] = 'runway.module.terraform.Terraform'
-        elif os.path.isfile(os.path.join(path, 'cdk.json')) and (
-                os.path.isfile(os.path.join(path, 'package.json'))):
-            module_options['class_path'] = 'runway.module.cdk.CloudDevelopmentKit'  # noqa
+        if os.path.isfile(os.path.join(path, 'cdk.json')) \
+             and os.path.isfile(os.path.join(path, 'package.json')):
+            class_path = pkg + 'cdk.CloudDevelopmentKit'
         elif glob.glob(os.path.join(path, '*.env')):
-            module_options['class_path'] = 'runway.module.cloudformation.CloudFormation'  # noqa
-    if not module_options.get('class_path'):
-        LOGGER.error('No valid deployment configurations found for %s',
-                     os.path.basename(path))
+            class_path = pkg + 'cloudformation.CloudFormation'
+        elif os.path.isfile(os.path.join(path, 'serverless.yml')):
+            class_path = pkg + 'serverless.Serverless'
+        elif glob.glob(os.path.join(path, '*.tf')):
+            class_path = pkg + 'terraform.Terraform'
+
+    if not class_path:
+        LOGGER.error('No module class found for %s', os.path.basename(path))
         sys.exit(1)
-    return load_object_from_string(module_options['class_path'])
+
+    return load_object_from_string(class_path)
 
 
 def get_deployment_env_vars(env_name, env_var_config=None, env_root=None):
@@ -155,12 +163,10 @@ def path_is_current_dir(path):
 
 def load_module_opts_from_file(path, module_options):
     """Update module_options with any options defined in module path."""
-    module_options_file = os.path.join(path,
-                                       'runway.module.yml')
+    module_options_file = os.path.join(path, 'runway.module.yml')
     if os.path.isfile(module_options_file):
         with open(module_options_file, 'r') as stream:
-            module_options = merge_dicts(module_options,
-                                         yaml.safe_load(stream))
+            module_options = merge_dicts(module_options, yaml.safe_load(stream))
     return module_options
 
 
@@ -321,7 +327,7 @@ class ModulesCommand(RunwayCommand):
             shutil.rmtree(os.path.join(self.env_root, directory))
         return True
 
-    def run(self, deployments=None, command='plan'):  # noqa pylint: disable=too-many-branches,too-many-statements
+    def run(self, deployments=None, command='plan'):
         """Execute apps/code command."""
         if deployments is None:
             deployments = self.runway_config['deployments']
@@ -329,7 +335,8 @@ class ModulesCommand(RunwayCommand):
                                            self.runway_config.get('ignore_git_branch', False)),
                           env_region=None,
                           env_root=self.env_root,
-                          env_vars=os.environ.copy())
+                          env_vars=os.environ.copy(),
+                          project_name=self.runway_config.get('name'))
         echo_detected_environment(context.env_name, context.env_vars)
 
         if command == 'destroy':
@@ -357,83 +364,150 @@ class ModulesCommand(RunwayCommand):
                     deployments
                 )
 
+        LOGGER.info("")
+
         LOGGER.info("Found %d deployment(s)", len(deployments_to_run))
         for i, deployment in enumerate(deployments_to_run):
+            self._process_deployment(context, deployment, i, command)
+            if deployment.get('assume-role'):
+                post_deploy_assume_role(deployment['assume-role'], context)
+
+        LOGGER.info("")
+        LOGGER.info("")
+
+    def _process_deployment(self, context, deployment, index, command):
+        LOGGER.info("")
+        LOGGER.info("")
+        LOGGER.info("============================================================")
+        LOGGER.info("======= Processing deployment %d ===========================", index)
+        LOGGER.info("============================================================")
+
+        if deployment.get('regions'):
+            if deployment.get('env_vars'):
+                deployment_env_vars = get_deployment_env_vars(context.env_name,
+                                                              deployment['env_vars'],
+                                                              self.env_root)
+                if deployment_env_vars:
+                    LOGGER.info("OS environment variable overrides being "
+                                "applied this deployment: %s",
+                                str(deployment_env_vars))
+                context.env_vars = merge_dicts(context.env_vars, deployment_env_vars)
+
             LOGGER.info("")
-            LOGGER.info("======= Processing deployment %d ===========================", i)
+            LOGGER.info("Attempting to deploy '%s' to region(s): %s",
+                        context.env_name,
+                        ", ".join(deployment['regions']))
 
-            if deployment.get('regions'):
-                if deployment.get('env_vars'):
-                    deployment_env_vars = get_deployment_env_vars(context.env_name,
-                                                                  deployment['env_vars'],
-                                                                  self.env_root)
-                    if deployment_env_vars:
-                        LOGGER.info("OS environment variable overrides being "
-                                    "applied this deployment: %s",
-                                    str(deployment_env_vars))
-                    context.env_vars = merge_dicts(context.env_vars, deployment_env_vars)
-
+            for region in deployment['regions']:
                 LOGGER.info("")
-                LOGGER.info("Attempting to deploy '%s' to region(s): %s",
-                            context.env_name,
-                            ", ".join(deployment['regions']))
+                LOGGER.info("======= Processing region %s ================"
+                            "===========", region)
 
-                for region in deployment['regions']:
-                    LOGGER.info("")
-                    LOGGER.info("======= Processing region %s ================"
-                                "===========", region)
-
-                    context.env_region = region
-                    context.env_vars = merge_dicts(
-                        context.env_vars,
-                        {'AWS_DEFAULT_REGION': context.env_region,
-                         'AWS_REGION': context.env_region}
-                    )
-                    if deployment.get('assume-role'):
-                        pre_deploy_assume_role(deployment['assume-role'], context)
-                    if deployment.get('account-id') or (deployment.get('account-alias')):
-                        validate_account_credentials(deployment, context)
-
-                    modules = deployment.get('modules', [])
-                    if deployment.get('current_dir'):
-                        modules.append('.' + os.sep)
-                    for module in modules:
-                        module_opts = {}
-                        if deployment.get('environments'):
-                            module_opts['environments'] = deployment['environments'].copy()  # noqa
-                        if deployment.get('module_options'):
-                            module_opts['options'] = deployment['module_options'].copy()  # noqa
-                        if isinstance(module, six.string_types):
-                            module = {'path': module}
-                        if path_is_current_dir(module['path']):
-                            module_root = self.env_root
-                        else:
-                            module_root = os.path.join(self.env_root, module['path'])
-                        module_opts = merge_dicts(module_opts, module)
-                        module_opts = load_module_opts_from_file(module_root, module_opts)
-                        if deployment.get('skip-npm-ci'):
-                            module_opts['skip_npm_ci'] = True
-
-                        LOGGER.info("")
-                        LOGGER.info("---- Processing module '%s' for '%s' in %s --------------",
-                                    module['path'],
-                                    context.env_name,
-                                    region)
-                        LOGGER.info("Module options: %s", module_opts)
-                        with change_dir(module_root):
-                            getattr(
-                                determine_module_class(module_root, module_opts)(  # noqa
-                                    context=context,
-                                    path=module_root,
-                                    options=module_opts
-                                ),
-                                command)()
-
+                context.env_region = region
+                context.env_vars = merge_dicts(
+                    context.env_vars,
+                    {'AWS_DEFAULT_REGION': context.env_region,
+                     'AWS_REGION': context.env_region}
+                )
                 if deployment.get('assume-role'):
-                    post_deploy_assume_role(deployment['assume-role'], context)
-            else:
-                LOGGER.error('No region configured for any deployment')
-                sys.exit(1)
+                    pre_deploy_assume_role(deployment['assume-role'], context)
+                if deployment.get('account-id') or (deployment.get('account-alias')):
+                    validate_account_credentials(deployment, context)
+
+                modules = deployment.get('modules', [])
+                if deployment.get('current_dir'):
+                    modules.append('.' + os.sep)
+                for module in modules:
+                    self._process_module(context, deployment, module, command)
+        else:
+            LOGGER.error('No region configured for any deployment')
+            sys.exit(1)
+
+    def _module_defined_for(self, module_class, path, environment_name, region):
+        folder = RunwayModuleFolder(path)
+        extension = module_class.environment_file_extension()
+        if folder.locate_env_file(["%s-%s.%s" % (environment_name, region, extension)]):
+            return True
+        elif folder.locate_env_file(["%s.%s" % (environment_name, extension)]):
+            return True
+        return False
+
+    def _process_module(self, context, deployment, module, command):
+        module_opts = {}
+
+        if isinstance(module, six.string_types):
+            module = {'path': module}
+
+        # if deployment.get('environments'):
+        #     module_opts['environments'] =
+        #     deployment['environments'].copy()  # noqa
+        # else:
+        #     module_opts['environments'] = {}
+        # if module.get('environments'):
+        #     module_opts['module_environments'] = \
+        #         module['environments'].copy()
+
+        if deployment.get('module_options'):
+            module_opts['options'] = \
+                deployment['module_options'].copy()
+
+        if path_is_current_dir(module['path']):
+            module_root = self.env_root
+        else:
+            module_root = os.path.join(self.env_root, module['path'])
+
+        module_class = determine_module_class(module_root, module.get('class_path'))
+
+        if not self._module_defined_for(module_class, module['path'],
+                                        context.env_name, context.env_region):
+            LOGGER.info("")
+            LOGGER.info(
+                "***** Skipping module '%s': no configuration found for "
+                "environment '%s' and region '%s'",
+                module['path'],
+                context.env_name,
+                context.env_region
+            )
+            LOGGER.info("")
+            return
+
+        module_opts = load_module_opts_from_file(module_root, module_opts)
+
+        skip_npm_ci = deployment.get('skip-npm-ci') is not None
+
+        config = ModuleConfig(
+            context.env_name,
+            deployment.get('environments', {}),
+            module.get('environments', {}),
+            skip_npm_ci,
+            module_opts.get('build_steps'),
+            module.get('namespace'),
+            module.get('class_path')
+        )
+
+        if self._is_dry_run:
+            LOGGER.info("")
+            LOGGER.info("Here we would process module '%s' for '%s' in %s",
+                        module['path'],
+                        context.env_name,
+                        context.env_region)
+            LOGGER.info("Module options: %s", module_opts)
+        else:
+            LOGGER.info("")
+            LOGGER.info("---- Processing module '%s' for '%s' in %s --------------",
+                        module['path'],
+                        context.env_name,
+                        context.env_region)
+            LOGGER.info("Module options: %s", module_opts)
+            with change_dir(module_root):
+                LOGGER.info("creating instance of '%s'", module_class)
+                module_instance = module_class(
+                    context=context,
+                    path=module_root,
+                    config=config
+                )
+                command_function = getattr(module_instance, command)
+                command_function()
 
     def plan(self, deployments=None):
         """Plan apps/code deployment."""
