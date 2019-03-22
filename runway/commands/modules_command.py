@@ -351,6 +351,7 @@ class ModulesCommand(RunwayCommand):
                 deployments_to_run = self.reverse_deployments(
                     self.select_deployment_to_run(
                         context.env_name,
+                        self.options,
                         deployments,
                         command=command
                     )
@@ -358,6 +359,7 @@ class ModulesCommand(RunwayCommand):
             else:
                 deployments_to_run = self.select_deployment_to_run(
                     context.env_name,
+                    self.options,
                     deployments
                 )
 
@@ -467,14 +469,23 @@ class ModulesCommand(RunwayCommand):
         return reversed_deployments
 
     @staticmethod
-    def select_deployment_to_run(env_name, deployments=None, command='build'):  # noqa pylint: disable=too-many-branches,too-many-statements
+    def select_deployment_to_run(env_name, args, deployments, command='build'):  # noqa pylint: disable=too-many-branches,too-many-statements,too-many-locals
         """Query user for deployments to run."""
         if deployments is None or not deployments:
             return []
+
         deployments_to_run = []
 
-        if len(deployments) == 1:
-            selected_index = 1
+        num_deployments = len(deployments)
+
+        if num_deployments == 1:
+            selected_deployment_index = 1
+        elif args.get('--deployment-index'):
+            deployment_argument = args.get('--deployment-index')
+            if not ((deployment_argument == 'all') or deployment_argument.isdigit()):
+                LOGGER.error('"deployment-index" argument must be a valid number (or "all")')
+                sys.exit(1)
+            selected_deployment_index = deployment_argument
         else:
             print('')
             print('Configured deployments:')
@@ -487,21 +498,43 @@ class ModulesCommand(RunwayCommand):
             if command == 'destroy':
                 print('(Operating in destroy mode -- "all" will destroy all '
                       'deployments in reverse order)')
-            selected_index = input('Enter number of deployment to run '
-                                   '(or "all"): ')
+            selected_deployment_index = input('Enter number of deployment to run (or "all"): ')
 
-        if selected_index == 'all':
+        if selected_deployment_index == 'all':
             return deployments
-        if selected_index == '':
+        if selected_deployment_index == '' or not selected_deployment_index.isdigit():
             LOGGER.error('Please select a valid number (or "all")')
             sys.exit(1)
+        selected_deployment_index = int(selected_deployment_index)
+        if not 1 <= selected_deployment_index <= num_deployments:
+            LOGGER.error('Deployment index must be between 1 and %d', num_deployments)
+            sys.exit(1)
 
-        selected_deploy = deployments[int(selected_index) - 1]
+        selected_deploy = deployments[selected_deployment_index - 1]
         if selected_deploy.get('current_dir', False):
             deployments_to_run.append(selected_deploy)
+
         elif not selected_deploy.get('modules', []):
             LOGGER.error('No modules configured in selected deployment')
             sys.exit(1)
+
+        elif deployment_argument:
+            module_argument = args.get('--module-index')
+            if not module_argument or (module_argument == 'all'):
+                deployments_to_run.append(selected_deploy)
+            elif module_argument and not module_argument.isdigit():
+                LOGGER.error('"module-index" argument must be a valid number (or "all")')
+                sys.exit(1)
+            else:
+                selected_module_index = int(module_argument)
+                num_modules = len(selected_deploy['modules'])
+                if not 1 <= selected_module_index <= num_modules:
+                    LOGGER.error('"module-index" argument must be between 1 and %d', num_modules)
+                    sys.exit(1)
+                module_list = [selected_deploy['modules'][int(selected_module_index) - 1]]
+                selected_deploy['modules'] = module_list
+                deployments_to_run.append(selected_deploy)
+
         elif len(selected_deploy['modules']) == 1:
             # No need to select a module in the deployment - there's only one
             if command == 'destroy':
@@ -510,6 +543,7 @@ class ModulesCommand(RunwayCommand):
                 if not strtobool(input('Proceed?: ')):
                     sys.exit(0)
             deployments_to_run.append(selected_deploy)
+
         else:
             print('')
             print('Configured modules in deployment:')
@@ -522,17 +556,18 @@ class ModulesCommand(RunwayCommand):
             if command == 'destroy':
                 print('(Operating in destroy mode -- "all" will destroy all '
                       'deployments in reverse order)')
-            selected_index = input('Enter number of module to run '
-                                   '(or "all"): ')
-            if selected_index == 'all':
+            selected_module_index = input('Enter number of module to run (or "all"): ')
+
+            if selected_module_index == 'all':
                 deployments_to_run.append(selected_deploy)
-            elif selected_index == '' or (
-                    not selected_index.isdigit() or (
-                        not 0 < int(selected_index) <= len(selected_deploy['modules']))):  # noqa
+            elif selected_module_index == '' or not selected_module_index.isdigit():
                 LOGGER.error('Please select a valid number (or "all")')
                 sys.exit(1)
+            elif not 1 <= selected_module_index <= len(selected_deploy['modules']):  # noqa
+                LOGGER.error('Number must be between 1 and %d', len(selected_deploy['modules']))
+                sys.exit(1)
             else:
-                module_list = [selected_deploy['modules'][int(selected_index) - 1]]  # noqa
+                module_list = [selected_deploy['modules'][selected_module_index - 1]]  # noqa
                 selected_deploy['modules'] = module_list
                 deployments_to_run.append(selected_deploy)
 
