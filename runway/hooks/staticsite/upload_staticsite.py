@@ -11,6 +11,8 @@ from awscli.clidriver import create_clidriver
 from stacker.lookups.handlers.output import OutputLookup
 from stacker.session_cache import get_session
 
+from ..source_hash_tracking import store_hash_of_deployed_files
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -55,8 +57,7 @@ def sync(context, provider, **kwargs):  # pylint: disable=too-many-locals
                                       context=context)
 
     if context.hook_data['staticsite']['deploy_is_current']:
-        LOGGER.info('staticsite: skipping upload; latest version already '
-                    'deployed')
+        LOGGER.info('staticsite: skipping upload; latest version already deployed')
     else:
         distribution_id = OutputLookup.handle(
             kwargs.get('distributionid_output_lookup'),
@@ -90,18 +91,9 @@ def sync(context, provider, **kwargs):  # pylint: disable=too-many-locals
                     distribution_domain)
 
         if not context.hook_data['staticsite'].get('hash_tracking_disabled'):
-            LOGGER.info("staticsite: updating environment SSM parameter %s "
-                        "with hash %s",
-                        context.hook_data['staticsite']['hash_tracking_parameter'],  # noqa
-                        context.hook_data['staticsite']['hash'])
-            ssm_client = session.client('ssm')
-            ssm_client.put_parameter(
-                Name=context.hook_data['staticsite']['hash_tracking_parameter'],  # noqa
-                Description='Hash of currently deployed static website source',
-                Value=context.hook_data['staticsite']['hash'],
-                Type='String',
-                Overwrite=True
-            )
+            store_hash_of_deployed_files(get_session(provider.region),
+                                         context.hook_data['staticsite'])
+
     LOGGER.info("staticsite: cleaning up old site archives...")
     archives = []
     s3_client = session.client('s3')

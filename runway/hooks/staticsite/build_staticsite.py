@@ -12,8 +12,8 @@ from botocore.exceptions import ClientError
 from stacker.lookups.handlers.rxref import RxrefLookup
 from stacker.session_cache import get_session
 
-from .util import get_hash_of_files
 from ...util import change_dir, run_commands
+from ..source_hash_tracking import have_the_files_changed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -81,9 +81,10 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
     """Build static site."""
     session = get_session(provider.region)
     options = kwargs.get('options', {})
-    context_dict = {}
-    context_dict['artifact_key_prefix'] = "%s-%s-" % (options['namespace'], options['name'])  # noqa
-    default_param_name = "%shash" % context_dict['artifact_key_prefix']
+
+    hashing_options = options.get('source_hashing', {})
+
+    artifact_key_prefix = "%s-%s-" % (options['namespace'], options['name'])  # noqa
 
     if options.get('build_output'):
         build_output = os.path.join(
@@ -92,6 +93,24 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
         )
     else:
         build_output = options['path']
+
+    context_dict = {}
+    if hashing_options.get('enabled', True):
+        LOGGER.info("checking if these files have been previously deployed...")
+        context_dict = have_the_files_changed(
+            get_session(provider.region),
+            artifact_key_prefix,
+            options['path'],
+            hashing_options.get('directories'),
+            hashing_options.get('parameter')
+        )
+        context_dict['current_archive_filename'] = \
+            artifact_key_prefix + context_dict['hash'] + '.zip'
+
+    else:
+        LOGGER.info("not checking if these files have been previously deployed")
+        context_dict['hash_tracking_disabled'] = True
+        context_dict['current_archive_filename'] = artifact_key_prefix + '.zip'
 
     context_dict['artifact_bucket_name'] = RxrefLookup.handle(
         kwargs.get('artifact_bucket_rxref_lookup'),
@@ -102,41 +121,7 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
     if options.get('pre_build_steps'):
         run_commands(options['pre_build_steps'], options['path'])
 
-    context_dict['hash'] = get_hash_of_files(
-        root_path=options['path'],
-        directories=options.get('source_hashing', {}).get('directories')
-    )
-
-    # Now determine if the current staticsite has already been deployed
-    if options.get('source_hashing', {}).get('enabled', True):
-        context_dict['hash_tracking_parameter'] = options.get(
-            'source_hashing', {}).get('parameter', default_param_name)
-
-        ssm_client = session.client('ssm')
-
-        try:
-            old_parameter_value = ssm_client.get_parameter(
-                Name=context_dict['hash_tracking_parameter']
-            )['Parameter']['Value']
-        except ssm_client.exceptions.ParameterNotFound:
-            old_parameter_value = None
-    else:
-        context_dict['hash_tracking_disabled'] = True
-        old_parameter_value = None
-
-    context_dict['current_archive_filename'] = (
-        context_dict['artifact_key_prefix'] + context_dict['hash'] + '.zip'
-    )
-    if old_parameter_value:
-        context_dict['old_archive_filename'] = (
-            context_dict['artifact_key_prefix'] + old_parameter_value + '.zip'
-        )
-
-    if old_parameter_value == context_dict['hash']:
-        LOGGER.info("staticsite: skipping build; app hash %s already deployed "
-                    "in this environment",
-                    context_dict['hash'])
-        context_dict['deploy_is_current'] = True
+    if 'deploy_is_current' in context_dict:
         return context_dict
 
     if does_s3_object_exist(context_dict['artifact_bucket_name'],

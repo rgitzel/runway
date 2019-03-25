@@ -40,7 +40,8 @@ class StaticSite(RunwayModule):
                     module_dir)
 
         # Default parameter name matches build_staticsite hook
-        hash_param = self.options.get('options', {}).get('source_hashing', {}).get('parameter') if self.options.get('options', {}).get('source_hashing', {}).get('parameter') else "${namespace}-%s-hash" % name # noqa pylint: disable=line-too-long
+        hash_param = self.options.get('options', {}).get('source_hashing', {}).get('parameter')\
+                if self.options.get('options', {}).get('source_hashing', {}).get('parameter') else "${namespace}-%s-hash" % name # noqa pylint: disable=line-too-long
         build_staticsite_args = self.options.copy()
         if not build_staticsite_args.get('options'):
             build_staticsite_args['options'] = {}
@@ -85,8 +86,8 @@ class StaticSite(RunwayModule):
             site_stack_variables['AcmCertificateArn'] = '${ssmstore ${staticsite_acmcert_ssm_param}}'  # noqa pylint: disable=line-too-long
         else:
             site_stack_variables['AcmCertificateArn'] = '${default staticsite_acmcert_arn::undefined}'  # noqa pylint: disable=line-too-long
-        # If staticsite_lambda_function_associations defined, add to stack
-        # config
+
+        # If staticsite_lambda_function_associations defined, add to stack config
         if self.options.get('environments',
                             {}).get(self.context.env_name,
                                     {}).get('staticsite_lambda_function_associations'):  # noqa
