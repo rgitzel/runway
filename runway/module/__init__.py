@@ -96,6 +96,9 @@ def run_npm_install(path, options, context):
 class RunwayModule(object):
     """Base class for Runway modules."""
 
+    ENVIRONMENT_NAME_KEY = "runway_environment_name"
+    PROJECT_NAME_KEY = "runway_project_name"
+
     def __init__(self, context, path, options=None):
         """Initialize base class."""
         self.context = context

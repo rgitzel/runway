@@ -107,9 +107,9 @@ class CloudFormation(RunwayModule):
 
         if self.context.project_name:
             stacker_cmd.extend(['-e', "%s=%s" %
-                                ('runway_project_name', self.context.project_name)])
+                                (self.PROJECT_NAME_KEY, self.context.project_name)])
         stacker_cmd.extend(['-e', "%s=%s" %
-                            ('runway_environment_name', self.context.env_name)])
+                            (self.ENVIRONMENT_NAME_KEY, self.context.env_name)])
 
         if stacker_env_file_present:
             stacker_cmd.append(stacker_env_file)

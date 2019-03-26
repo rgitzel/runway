@@ -100,8 +100,8 @@ class Serverless(RunwayModule):
                         run_sls_remove(sls_cmd, self.context.env_vars)
                     else:
                         env_vars = self.context.env_vars.copy()
-                        env_vars['runway_environment_name'] = self.context.env_name
-                        env_vars['runway_project_name'] = self.context.project_name
+                        env_vars[self.ENVIRONMENT_NAME_KEY] = self.context.env_name
+                        env_vars[self.PROJECT_NAME_KEY] = self.context.project_name
 
                         run_module_command(cmd_list=sls_cmd, env_vars=env_vars)
             else:

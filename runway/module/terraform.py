@@ -226,8 +226,8 @@ class Terraform(RunwayModule):
                 tf_cmd.extend(['-var', "%s=%s" % (key, val)])
 
         if self.context.project_name:
-            tf_cmd.extend(['-var', "%s=%s" % ('runway_project_name', self.context.project_name)])
-        tf_cmd.extend(['-var', "%s=%s" % ('runway_environment_name', self.context.env_name)])
+            tf_cmd.extend(['-var', "%s=%s" % (self.PROJECT_NAME_KEY, self.context.project_name)])
+        tf_cmd.extend(['-var', "%s=%s" % (self.ENVIRONMENT_NAME_KEY, self.context.env_name)])
 
         if self.options.get('environments', {}).get(self.context.env_name) or (
                 workspace_tfvar_present):
