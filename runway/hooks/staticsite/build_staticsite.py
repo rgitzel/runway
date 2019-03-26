@@ -13,7 +13,7 @@ from stacker.lookups.handlers.rxref import RxrefLookup
 from stacker.session_cache import get_session
 
 from ...util import change_dir, run_commands
-from ..source_hash_tracking import have_the_files_changed
+from ..source_hash_tracking import SourceHashTracking
 
 LOGGER = logging.getLogger(__name__)
 
@@ -82,30 +82,30 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
     session = get_session(provider.region)
     options = kwargs.get('options', {})
 
-    hashing_options = options.get('source_hashing', {})
+    source_tracking_options = options.get('source_hashing', {})
 
     artifact_key_prefix = "%s-%s-" % (options['namespace'], options['name'])  # noqa
 
-    if options.get('build_output'):
-        build_output = os.path.join(
-            options['path'],
-            options['build_output']
-        )
-    else:
-        build_output = options['path']
-
+    # this dict will be passed along to 'upload_staticsite'
     context_dict = {}
-    if hashing_options.get('enabled', True):
+
+    if source_tracking_options.get('enabled', True):
+        context_dict['hash_tracking_disabled'] = False
         LOGGER.info("checking if these files have been previously deployed...")
-        context_dict = have_the_files_changed(
-            get_session(provider.region),
-            artifact_key_prefix,
-            options['path'],
-            hashing_options.get('directories'),
-            hashing_options.get('parameter')
+        source_tracking = SourceHashTracking(
+            session.client('ssm'),
+            options['namespace'],
+            options['name'],
+            options['path']
         )
+        (changed, hash_string) = source_tracking.have_the_files_changed(
+            source_tracking_options.get('directories')
+        )
+
+        context_dict['deploy_is_current'] = not changed
+
         context_dict['current_archive_filename'] = \
-            artifact_key_prefix + context_dict['hash'] + '.zip'
+            artifact_key_prefix + hash_string + '.zip'
 
     else:
         LOGGER.info("not checking if these files have been previously deployed")
@@ -121,7 +121,8 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
     if options.get('pre_build_steps'):
         run_commands(options['pre_build_steps'], options['path'])
 
-    if 'deploy_is_current' in context_dict:
+    if context_dict.get('deploy_is_current'):
+        # we're done
         return context_dict
 
     if does_s3_object_exist(context_dict['artifact_bucket_name'],
@@ -135,9 +136,15 @@ def build(context, provider, **kwargs):  # pylint: disable=unused-argument
         if options.get('build_steps'):
             LOGGER.info('staticsite: executing build commands')
             run_commands(options['build_steps'], options['path'])
+        if options.get('build_output'):
+            build_output = os.path.join(
+                options['path'],
+                options['build_output']
+            )
+        else:
+            build_output = options['path']
         zip_and_upload(build_output, context_dict['artifact_bucket_name'],
                        context_dict['current_archive_filename'], session)
         context_dict['app_directory'] = build_output
 
-    context_dict['deploy_is_current'] = False
     return context_dict

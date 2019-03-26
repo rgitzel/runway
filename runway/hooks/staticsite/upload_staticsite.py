@@ -11,7 +11,7 @@ from awscli.clidriver import create_clidriver
 from stacker.lookups.handlers.output import OutputLookup
 from stacker.session_cache import get_session
 
-from ..source_hash_tracking import store_hash_of_deployed_files
+from ..source_hash_tracking import store_hash_of_deployed_files, HashResults
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,9 @@ def sync(context, provider, **kwargs):  # pylint: disable=too-many-locals
                                       provider=provider,
                                       context=context)
 
-    if context.hook_data['staticsite']['deploy_is_current']:
+    hook_data = context.hook_data['staticsite']
+
+    if hook_data['deploy_is_current']:
         LOGGER.info('staticsite: skipping upload; latest version already deployed')
     else:
         distribution_id = OutputLookup.handle(
@@ -75,7 +77,7 @@ def sync(context, provider, **kwargs):  # pylint: disable=too-many-locals
         # the files until https://github.com/boto/boto3/issues/358 is resolved
         aws_cli(['s3',
                  'sync',
-                 context.hook_data['staticsite']['app_directory'],
+                 hook_data['app_directory'],
                  "s3://%s/" % bucket_name,
                  '--delete'])
 
@@ -90,29 +92,30 @@ def sync(context, provider, **kwargs):  # pylint: disable=too-many-locals
                     distribution_id,
                     distribution_domain)
 
-        if not context.hook_data['staticsite'].get('hash_tracking_disabled'):
-            store_hash_of_deployed_files(get_session(provider.region),
-                                         context.hook_data['staticsite'])
+        if not hook_data.get('hash_tracking_disabled'):
+            results = HashResults(
+                hook_data.get('hash'),
+                hook_data.get('hash_tracking_parameter')
+            )
+            store_hash_of_deployed_files(get_session(provider.region), results)
 
     LOGGER.info("staticsite: cleaning up old site archives...")
     archives = []
     s3_client = session.client('s3')
     list_objects_v2_paginator = s3_client.get_paginator('list_objects_v2')
     response_iterator = list_objects_v2_paginator.paginate(
-        Bucket=context.hook_data['staticsite']['artifact_bucket_name'],
-        Prefix=context.hook_data['staticsite']['artifact_key_prefix']
+        Bucket=hook_data['artifact_bucket_name'],
+        Prefix=hook_data['artifact_key_prefix']
     )
     for page in response_iterator:
         archives.extend(page.get('Contents', []))
-    archives_to_prune = get_archives_to_prune(
-        archives,
-        context.hook_data['staticsite']
-    )
+    archives_to_prune = get_archives_to_prune(archives, hook_data)
+
     # Iterate in chunks of 1000 to match delete_objects limit
     for objects in [archives_to_prune[i:i + 1000]
                     for i in range(0, len(archives_to_prune), 1000)]:
         s3_client.delete_objects(
-            Bucket=context.hook_data['staticsite']['artifact_bucket_name'],
+            Bucket=hook_data['artifact_bucket_name'],
             Delete={'Objects': [{'Key': i} for i in objects]}
         )
     return True

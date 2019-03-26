@@ -40,8 +40,10 @@ class StaticSite(RunwayModule):
                     module_dir)
 
         # Default parameter name matches build_staticsite hook
-        hash_param = self.options.get('options', {}).get('source_hashing', {}).get('parameter')\
-                if self.options.get('options', {}).get('source_hashing', {}).get('parameter') else "${namespace}-%s-hash" % name # noqa pylint: disable=line-too-long
+        hash_param = self.options.get('options', {}).get('source_hashing', {}).get('parameter')
+        if not hash_param:
+            hash_param = "${namespace}-%s-hash" % name
+
         build_staticsite_args = self.options.copy()
         if not build_staticsite_args.get('options'):
             build_staticsite_args['options'] = {}
